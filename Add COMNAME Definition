@@ -1,0 +1,39 @@
+"""
+Script documentation
+- Tool parameters are accessed using arcpy.GetParameter() or 
+                                     arcpy.GetParameterAsText()
+- Update derived parameter values using arcpy.SetParameter() or
+                                        arcpy.SetParameterAsText()
+"""
+import arcpy
+# Get parameters from user input
+map_name = arcpy.GetParameterAsText(0)  # Map name
+comname_value = arcpy.GetParameterAsText(1)  # COMNAMEvalue
+# Access the current project and find the specified map
+aprx = arcpy.mp.ArcGISProject("CURRENT")
+m = None
+for map_obj in aprx.listMaps():
+    if map_obj.name == map_name:
+        m = map_obj
+        break
+# If map not found, return error
+if m is None:
+    arcpy.AddError(f"Map '{map_name}' not found.")
+    raise SystemExit
+# Apply definition query to all valid layers
+for lyr in m.listLayers():
+    if lyr.supports("DEFINITIONQUERY"):
+        # Set the query dynamically
+        query_name = f"{comname_value}"  # This is just a label
+        definition_query = f"COMNAME = '{comname_value}'"
+        # Apply query
+        cim = lyr.getDefinition('V2')  # Get the CIM definition
+        if hasattr(cim.featureTable, "definitionFilterChoices"):
+            cim.featureTable.definitionFilterChoices = [{
+                "name": query_name,  # Set name dynamically
+                "definitionExpression": definition_query
+            }]
+        cim.featureTable.definitionExpression = definition_query
+        lyr.setDefinition(cim)
+        arcpy.AddMessage(f"Applied query '{query_name}' to {lyr.name}: {definition_query}")
+arcpy.AddMessage("Definition query applied successfully!")
