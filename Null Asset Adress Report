@@ -1,0 +1,46 @@
+"""
+Script documentation
+
+- Tool parameters are accessed using arcpy.GetParameter() or 
+                                     arcpy.GetParameterAsText()
+- Update derived parameter values using arcpy.SetParameter() or
+                                        arcpy.SetParameterAsText()
+"""
+import arcpy
+
+# Set the path to the SDE connection file
+sde_connection = r"INSERT_PATH"
+
+def count_null_address(sde_conn):
+    total_null_count = 0
+    
+    # List all feature datasets in the SDE
+    arcpy.env.workspace = sde_conn
+    feature_datasets = arcpy.ListDatasets(feature_type="Feature") or []
+    
+    for dataset in feature_datasets:
+        dataset_path = f"{sde_conn}\{dataset}"
+        
+        # List all feature classes in the feature dataset
+        feature_classes = arcpy.ListFeatureClasses(feature_dataset=dataset) or []
+        
+        for fc in feature_classes:
+            fc_path = f"{dataset_path}\{fc}"
+            
+            # Check if ADDRESS field exists
+            fields = [field.name for field in arcpy.ListFields(fc_path)]
+            if "ADDRESS" not in fields:
+                print(f"Skipping {fc}, no ADDRESS field.")
+                continue
+            
+            # Count features where ADDRESS is NULL directly
+            with arcpy.da.SearchCursor(fc_path, ["ADDRESS"]) as cursor:
+                null_count = sum(1 for row in cursor if row[0] is None)
+            
+            print(f"{fc}: {null_count} null ADDRESS values")
+            total_null_count += null_count
+    
+    print(f"Total features with NULL ADDRESS: {total_null_count}")
+
+# Run the function
+count_null_address(sde_connection)
