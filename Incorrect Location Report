@@ -1,0 +1,58 @@
+"""
+Script documentation
+- Tool parameters are accessed using arcpy.GetParameter() or 
+                                     arcpy.GetParameterAsText()
+- Update derived parameter values using arcpy.SetParameter() or
+                                        arcpy.SetParameterAsText()
+"""
+import arcpy
+import csv
+import os
+# Define parameters
+sde_connection = r"INSERT_PATH"
+output_csv = arcpy.GetParameterAsText(0)  # Accepts user input for output CSV path
+# Set workspace
+arcpy.env.workspace = sde_connection
+feature_datasets = arcpy.ListDatasets(feature_type="Feature") or [""]  # Include standalone feature classes
+# Prepare CSV file
+with open(output_csv, mode="w", newline="") as file:
+    writer = csv.writer(file)
+    writer.writerow(["Feature Class", "MAINTAINED_BY", "Null Count", "Incorrect Count", "Total Count"])
+    # Iterate through feature datasets and feature classes
+    for dataset in feature_datasets:
+        dataset_path = f"{sde_connection}\\{dataset}" if dataset else sde_connection
+        feature_classes = arcpy.ListFeatureClasses(feature_dataset=dataset) or []
+        for fc in feature_classes:
+            fc_path = f"{dataset_path}\\{fc}"
+            field_names = {f.name.lower(): f.name for f in arcpy.ListFields(fc_path)}
+            # Ensure required fields exist
+            if "location" not in field_names or "maintained_by" not in field_names or "comname" not in field_names:
+                continue
+            # Get actual field names
+            location_field = field_names["location"]
+            maintained_by_field = field_names["maintained_by"]
+            comname_field = field_names["comname"]
+            # Initialize counts
+            null_count = {}
+            total_count = {}
+            incorrect_count = {}
+            # Process feature class
+            with arcpy.da.SearchCursor(fc_path, [maintained_by_field, location_field, comname_field]) as cursor:
+                for row in cursor:
+                    maintained_by_value = row[0] if row[0] else "UNKNOWN"
+                    total_count[maintained_by_value] = total_count.get(maintained_by_value, 0) + 1
+                    # Count nulls in Location field
+                    if not row[1]:  # Null or empty
+                        null_count[maintained_by_value] = null_count.get(maintained_by_value, 0) + 1
+                    # Count mismatches between Location and COMNAME
+                    if row[1] and row[1] != row[2]:  # Non-null Location and mismatch with COMNAME
+                        incorrect_count[maintained_by_value] = incorrect_count.get(maintained_by_value, 0) + 1
+            # Write results to CSV
+            for maintained_by in total_count:
+                writer.writerow([
+                    fc,
+                    maintained_by,  # Correctly include MAINTAINED_BY value
+                    null_count.get(maintained_by, 0),  # Null count for the current MAINTAINED_BY value
+                    incorrect_count.get(maintained_by, 0),  # Incorrect count for the current MAINTAINED_BY value
+                    total_count[maintained_by]  # Total count for the current MAINTAINED_BY value
+                ])
